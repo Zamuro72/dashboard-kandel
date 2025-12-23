@@ -1,5 +1,38 @@
 /* ==================== BADGE UNTUK JENIS PROGRAM (UPDATED - TANPA AMDAL) ==================== */
 
+/* CRITICAL FIXES */
+.main-content {
+    margin-left: 260px !important;
+    min-height: 100vh;
+    background: #f5f5f5;
+}
+
+.content-area {
+    padding: 2rem;
+}
+
+.topbar {
+    background: white;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.topbar h1 {
+    font-size: 1.8rem;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.content-box {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+}
 /* Badge umum */
 span[class*="badge-"] {
     display: inline-block;
