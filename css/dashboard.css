@@ -1,0 +1,81 @@
+/* ==================== BADGE UNTUK JENIS PROGRAM (UPDATED - TANPA AMDAL) ==================== */
+
+/* Badge umum */
+span[class*="badge-"] {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Sertifikasi Kemnaker RI */
+.badge-sertifikasikemnakerri {
+    background: rgba(46, 159, 216, 0.15);
+    color: var(--primary-blue);
+}
+
+/* Sertifikasi BNSP */
+.badge-sertifikasibnsp {
+    background: rgba(107, 76, 154, 0.15);
+    color: var(--primary-purple);
+}
+
+/* Sertifikat Keselamatan Kebakaran (SKK) */
+.badge-sertifikatkeselamatankebakaran,
+.badge-sertifikatkeselamatankebakaranskk,
+.badge-skk {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+}
+
+/* Sertifikat Laik Operasi (SLO) */
+.badge-sertifikatlaikoperasi,
+.badge-sertifikatlaikoperasislo,
+.badge-slo {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+/* Sertifikat Laik Fungsi (SLF) */
+.badge-sertifikatlaikfungsi,
+.badge-sertifikatlaikfungsislf,
+.badge-slf {
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196f3;
+}
+
+/* Sertifikat Badan Usaha (SBU) */
+.badge-sertifikatbadanusaha,
+.badge-sertifikatbadanusahasbu,
+.badge-sbu {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+/* AMDAL - DIHAPUS */
+
+/* Analisis Dampak Lalu Lintas (ANDALALIN) */
+.badge-analisisdampaklalulintas,
+.badge-analisisdampaklalulintasandalalin,
+.badge-andalalin {
+    background: rgba(156, 39, 176, 0.15);
+    color: #9c27b0;
+}
+
+/* Pemeriksaan dan Pengujian Alat K3 (Riksa Uji Alat K3) */
+.badge-pemeriksaandanpengujianÐ°latk3,
+.badge-pemeriksaandanpengujianÐ°latk3riksaujialatk3,
+.badge-riksauji,
+.badge-riksaujialatk3 {
+    background: rgba(255, 87, 34, 0.15);
+    color: #ff5722;
+}
+
+/* GREENSHIP & EDGE */
+.badge-greenship,
+.badge-greenshipedge,
+.badge-greenshipampedge {
+    background: rgba(139, 195, 74, 0.15);
+    color: #8bc34a;
+}
