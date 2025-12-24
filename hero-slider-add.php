@@ -1,5 +1,5 @@
 <?php
-$page_title = "Tambah Hero Slide";
+$page_title = "Tambah Foto Gallery";
 include 'includes/header.php';
 include 'includes/sidebar.php';
 
@@ -7,45 +7,96 @@ $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $title = clean_input($_POST['title']);
-    $description = clean_input($_POST['description']);
-    $urutan = (int)$_POST['urutan'];
-    $aktif = isset($_POST['aktif']) ? 1 : 0;
+    error_log("=== GALLERY ADD DEBUG ===");
+    
+    $title = $conn->real_escape_string(trim($_POST['title']));
+    $description = $conn->real_escape_string(trim($_POST['description']));
+    
+    error_log("Title: " . $title);
+    error_log("Description: " . $description);
     
     // Handle cropped image
     if (isset($_POST['cropped_image']) && !empty($_POST['cropped_image'])) {
-        // Decode base64 image
         $cropped_data = $_POST['cropped_image'];
+        error_log("Cropped data length: " . strlen($cropped_data));
         
         // Remove data:image/png;base64, prefix
         $image_parts = explode(";base64,", $cropped_data);
-        $image_base64 = base64_decode($image_parts[1]);
         
-        // Generate filename
-        $filename = 'hero_' . uniqid() . '_' . time() . '.jpg';
-        $filepath = 'uploads/hero/' . $filename;
-        
-        // Save cropped image
-        if (file_put_contents($filepath, $image_base64)) {
-            $sql = "INSERT INTO hero_slider (image, title, description, urutan, aktif) 
-                    VALUES ('$filename', '$title', '$description', $urutan, $aktif)";
+        if (count($image_parts) > 1) {
+            $image_base64 = base64_decode($image_parts[1]);
+            error_log("Base64 decoded, size: " . strlen($image_base64));
             
-            if ($conn->query($sql)) {
-                $success = "Hero slide berhasil ditambahkan!";
-                echo "<script>
-                    setTimeout(function() {
-                        window.location.href = 'hero-slider.php';
-                    }, 1500);
-                </script>";
+            // Generate filename
+            $filename = 'gallery_' . uniqid() . '_' . time() . '.jpg';
+            
+            // FIXED: Path yang benar untuk InfinityFree
+            $upload_dir = __DIR__ . '/uploads/gallery/';
+            $filepath = $upload_dir . $filename;
+            
+            error_log("Upload directory: " . $upload_dir);
+            error_log("Full filepath: " . $filepath);
+            
+            // Check if directory exists and is writable
+            if (!is_dir($upload_dir)) {
+                error_log("Directory does not exist, creating...");
+                if (!mkdir($upload_dir, 0755, true)) {
+                    error_log("ERROR: Failed to create directory!");
+                    $error = "Gagal membuat folder uploads/gallery/";
+                }
+            }
+            
+            if (!is_writable($upload_dir)) {
+                error_log("ERROR: Directory is not writable!");
+                error_log("Directory permissions: " . substr(sprintf('%o', fileperms($upload_dir)), -4));
+                $error = "Folder uploads/gallery/ tidak dapat ditulis! Hubungi hosting untuk chmod 755.";
             } else {
-                $error = "Gagal menyimpan ke database: " . $conn->error;
+                error_log("Directory writable, proceeding with save...");
+                
+                // Save cropped image
+                if (file_put_contents($filepath, $image_base64)) {
+                    error_log("Image saved successfully to: " . $filepath);
+                    chmod($filepath, 0644);
+                    
+                    // Insert ke database
+                    $sql = "INSERT INTO gallery (title, description, image, created_at) 
+                            VALUES ('$title', '$description', '$filename', NOW())";
+                    
+                    error_log("SQL: " . $sql);
+                    
+                    if ($conn->query($sql)) {
+                        $success = "Foto berhasil ditambahkan!";
+                        error_log("Database insert successful!");
+                        echo "<script>
+                            alert('Foto berhasil ditambahkan!');
+                            setTimeout(function() {
+                                window.location.href = 'gallery.php';
+                            }, 1000);
+                        </script>";
+                    } else {
+                        $error = "Gagal menyimpan ke database: " . $conn->error;
+                        error_log("Database error: " . $conn->error);
+                        // Delete uploaded file jika database insert gagal
+                        if (file_exists($filepath)) {
+                            unlink($filepath);
+                        }
+                    }
+                } else {
+                    $error = "Gagal menyimpan gambar! Error: " . error_get_last()['message'];
+                    error_log("ERROR: file_put_contents failed!");
+                    error_log("PHP Error: " . error_get_last()['message']);
+                }
             }
         } else {
-            $error = "Gagal menyimpan gambar!";
+            $error = "Format gambar tidak valid!";
+            error_log("ERROR: Invalid base64 format");
         }
     } else {
         $error = "Gambar harus diupload dan di-crop!";
+        error_log("ERROR: No cropped image data received");
     }
+    
+    error_log("=== END DEBUG ===");
 }
 ?>
 
@@ -67,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     border: 2px solid #ddd;
     border-radius: 10px;
     overflow: hidden;
-    max-width: 800px;
+    max-width: 400px;
 }
 
 .crop-controls {
@@ -94,33 +145,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     border-left: 4px solid #17a2b8;
     margin-bottom: 1rem;
 }
-
-.alert-warning {
-    background: #fff3cd;
-    color: #856404;
-    padding: 1rem;
-    border-radius: 5px;
-    border-left: 4px solid #ffc107;
-    margin-bottom: 1rem;
-}
 </style>
 
 <div class="content-box">
     <div class="content-box-header">
-        <h2><i class="fas fa-plus-circle"></i> Tambah Hero Slide</h2>
-        <a href="hero-slider.php" class="btn btn-secondary">
+        <h2><i class="fas fa-plus-circle"></i> Tambah Foto Gallery</h2>
+        <a href="gallery.php" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Kembali
         </a>
     </div>
     
     <div class="alert alert-info">
         <i class="fas fa-info-circle"></i> 
-        <strong>Ukuran Ideal Hero Slider:</strong> Gunakan gambar dengan resolusi <strong>1920x450px</strong> (aspect ratio 4.27:1) sesuai tinggi hero slider di website.
-    </div>
-    
-    <div class="alert alert-warning">
-        <i class="fas fa-exclamation-triangle"></i> 
-        <strong>Penting:</strong> Maksimal 5 slide aktif. Pastikan untuk mengatur urutan dengan benar agar slide tampil sesuai keinginan.
+        <strong>Rekomendasi Ukuran:</strong> Gunakan gambar dengan resolusi <strong>800x600px</strong> (aspect ratio 4:3) untuk hasil terbaik.
     </div>
     
     <?php if ($success): ?>
@@ -135,69 +172,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         </div>
     <?php endif; ?>
     
-    <form method="POST" id="heroForm">
+    <form method="POST" id="galleryForm">
         <div class="form-group">
-            <label for="title"><i class="fas fa-heading"></i> Judul Slide (Opsional)</label>
+            <label for="title"><i class="fas fa-heading"></i> Judul Foto *</label>
             <input type="text" class="form-control" id="title" name="title" 
-                   placeholder="Contoh: Pelatihan K3 Terbaik Indonesia">
-            <small style="color: #666; display: block; margin-top: 0.5rem;">
-                <i class="fas fa-lightbulb"></i> Judul akan ditampilkan di slide (opsional)
-            </small>
+                   placeholder="Contoh: Pelatihan Gondola" required>
         </div>
         
         <div class="form-group">
-            <label for="description"><i class="fas fa-align-left"></i> Deskripsi (Opsional)</label>
+            <label for="description"><i class="fas fa-align-left"></i> Deskripsi</label>
             <textarea class="form-control" id="description" name="description" rows="3" 
-                      placeholder="Deskripsi singkat tentang slide ini..."></textarea>
-            <small style="color: #666; display: block; margin-top: 0.5rem;">
-                <i class="fas fa-lightbulb"></i> Deskripsi tambahan untuk keperluan internal
-            </small>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-                <label for="urutan"><i class="fas fa-sort-numeric-down"></i> Urutan *</label>
-                <input type="number" class="form-control" id="urutan" name="urutan" 
-                       value="1" min="1" max="10" required>
-                <small style="color: #666; display: block; margin-top: 0.5rem;">
-                    Urutan tampilan slide (1 = pertama, 2 = kedua, dst.)
-                </small>
-            </div>
-            
-            <div class="form-group">
-                <label style="display: block; margin-bottom: 0.5rem;">
-                    <i class="fas fa-toggle-on"></i> Status Slide
-                </label>
-                <label style="display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" name="aktif" checked style="margin-right: 0.5rem; width: 20px; height: 20px;">
-                    <span><i class="fas fa-eye"></i> Aktifkan Slide</span>
-                </label>
-                <small style="color: #666; display: block; margin-top: 0.5rem;">
-                    Centang untuk menampilkan slide di website
-                </small>
-            </div>
+                      placeholder="Deskripsi singkat tentang foto (opsional)"></textarea>
         </div>
         
         <div class="form-group">
-            <label><i class="fas fa-image"></i> Upload & Crop Gambar Hero Slider *</label>
-            
+            <label><i class="fas fa-image"></i> Upload & Crop Foto *</label>
             <div class="file-upload-box" onclick="document.getElementById('imageInput').click()">
                 <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
-                <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Klik untuk upload gambar</p>
-                <small style="color: #999; display: block;">
-                    Format: JPG, PNG, GIF<br>
-                    <strong style="color: var(--primary-blue);">Ukuran Ideal: 1920x450px (Aspect Ratio 4.27:1)</strong>
-                </small>
+                <p>Klik untuk upload foto</p>
+                <small style="color: #999;">Format: JPG, PNG, GIF (Rekomendasi: <strong>800x600px</strong> - 4:3 Ratio)</small>
                 <input type="file" id="imageInput" accept="image/*" style="display: none;">
             </div>
         </div>
         
         <!-- Cropper Area -->
         <div id="cropperArea" class="hidden">
-            <h3 style="color: var(--dark-bg); margin-bottom: 1rem;">
-                <i class="fas fa-crop-alt"></i> Crop Gambar Hero Slider
-            </h3>
-            
             <div class="crop-container">
                 <img id="imagePreview" src="" alt="Preview">
             </div>
@@ -210,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <i class="fas fa-search-minus"></i> Zoom Out
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="cropper.rotate(90)">
-                    <i class="fas fa-redo"></i> Rotate 90°
+                    <i class="fas fa-redo"></i> Rotate
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="cropper.reset()">
                     <i class="fas fa-undo"></i> Reset
@@ -221,30 +220,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
             
             <div class="form-group" style="margin-top: 1.5rem;">
-                <label style="font-weight: 600; color: var(--dark-bg);">
-                    <i class="fas fa-eye"></i> Preview Hasil Crop (1920x450px - Hero Slider):
-                </label>
+                <label><i class="fas fa-eye"></i> Preview Hasil Crop (800x600px):</label>
                 <div class="crop-preview">
                     <img id="croppedPreview" src="" alt="Cropped Preview" style="width: 100%; display: block;">
                 </div>
-                <small style="color: #666; display: block; margin-top: 0.5rem;">
-                    <i class="fas fa-check-circle" style="color: var(--primary-green);"></i> 
-                    Gambar akan disimpan dengan ukuran 1920x450px
-                </small>
             </div>
         </div>
         
         <!-- Hidden input untuk menyimpan cropped image -->
         <input type="hidden" id="croppedImage" name="cropped_image">
         
-        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
-                <i class="fas fa-save"></i> Simpan Hero Slide
-            </button>
-            <a href="hero-slider.php" class="btn btn-secondary">
-                <i class="fas fa-times"></i> Batal
-            </a>
-        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+            <i class="fas fa-save"></i> Simpan Foto
+        </button>
     </form>
 </div>
 
@@ -259,15 +247,14 @@ const cropperArea = document.getElementById('cropperArea');
 const croppedImage = document.getElementById('croppedImage');
 const croppedPreview = document.getElementById('croppedPreview');
 const submitBtn = document.getElementById('submitBtn');
-const heroForm = document.getElementById('heroForm');
+const galleryForm = document.getElementById('galleryForm');
 
 // Handle image selection
 imageInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     
     if (file) {
-        console.log('Image selected for hero slider:', file.name);
-        console.log('File size:', (file.size / 1024 / 1024).toFixed(2) + 'MB');
+        console.log('✓ Image selected:', file.name, '(' + (file.size/1024/1024).toFixed(2) + 'MB)');
         
         // Destroy existing cropper
         if (cropper) {
@@ -280,11 +267,11 @@ imageInput.addEventListener('change', function(e) {
             imagePreview.src = event.target.result;
             cropperArea.classList.remove('hidden');
             
-            console.log('Initializing cropper with 1920x450 (4.27:1 ratio)...');
+            console.log('✓ Initializing cropper with 4:3 ratio (800x600)...');
             
-            // FIXED: Initialize Cropper dengan aspect ratio 1920/450 untuk hero slider
+            // Initialize Cropper dengan aspect ratio 4:3 untuk gallery
             cropper = new Cropper(imagePreview, {
-                aspectRatio: 1920 / 450, // 4.266666:1 ratio - sesuai CSS hero slider
+                aspectRatio: 4 / 3, // 4:3 ratio untuk gallery
                 viewMode: 2,
                 autoCropArea: 1,
                 responsive: true,
@@ -303,11 +290,9 @@ imageInput.addEventListener('change', function(e) {
                 cropend: updateCroppedPreview,
                 zoom: updateCroppedPreview,
                 ready: function() {
-                    console.log('âœ" Cropper ready with 1920x450 dimensions!');
+                    console.log('✓ Cropper ready!');
                     updateCroppedPreview();
                     submitBtn.disabled = false;
-                    
-                    // Scroll to cropper
                     cropperArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
@@ -319,14 +304,13 @@ imageInput.addEventListener('change', function(e) {
 // Update preview hasil crop
 function updateCroppedPreview() {
     if (cropper) {
-        // FIXED: Output 1920x450px untuk hero slider
         const canvas = cropper.getCroppedCanvas({
-            width: 1920,
-            height: 450,
-            minWidth: 1920,
-            minHeight: 450,
-            maxWidth: 1920,
-            maxHeight: 450,
+            width: 800,
+            height: 600, // 4:3 ratio = 800x600px
+            minWidth: 800,
+            minHeight: 600,
+            maxWidth: 800,
+            maxHeight: 600,
             fillColor: '#fff',
             imageSmoothingEnabled: true,
             imageSmoothingQuality: 'high'
@@ -334,24 +318,31 @@ function updateCroppedPreview() {
         
         if (canvas) {
             // Update preview
-            const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-            croppedPreview.src = croppedDataUrl;
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            croppedPreview.src = dataUrl;
             
             // Save cropped image data
-            croppedImage.value = croppedDataUrl;
+            croppedImage.value = dataUrl;
             
-            console.log('âœ" Hero slider image cropped to 1920x450px');
-            console.log('Data size:', (croppedDataUrl.length / 1024).toFixed(2) + 'KB');
+            console.log('✓ Image cropped to 800x600px, data length:', dataUrl.length);
         }
     }
 }
 
 // Validate before submit
-heroForm.addEventListener('submit', function(e) {
+galleryForm.addEventListener('submit', function(e) {
+    const title = document.getElementById('title').value.trim();
     const croppedImageData = croppedImage.value;
     
     console.log('=== FORM VALIDATION ===');
+    console.log('Title:', title);
     console.log('Has cropped image:', croppedImageData ? 'YES' : 'NO');
+    
+    if (!title) {
+        e.preventDefault();
+        alert('❌ Judul foto harus diisi!');
+        return false;
+    }
     
     if (!croppedImageData) {
         e.preventDefault();
@@ -359,30 +350,13 @@ heroForm.addEventListener('submit', function(e) {
         return false;
     }
     
-    console.log('âœ" Validation passed, submitting form...');
+    console.log('✓ Validation passed, submitting...');
     
-    // Disable submit button
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan Hero Slide...';
-    
-    return true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 });
 
-// Prevent accidental form leave
-window.addEventListener('beforeunload', function(e) {
-    if (croppedImage.value && !heroForm.submitted) {
-        e.preventDefault();
-        e.returnValue = '';
-        return 'Anda memiliki gambar yang belum disimpan. Yakin ingin meninggalkan halaman?';
-    }
-});
-
-heroForm.addEventListener('submit', function() {
-    heroForm.submitted = true;
-});
-
-console.log('âœ" Hero Slider Add Form initialized');
-console.log('Aspect Ratio: 1920x450 (4.27:1)');
+console.log('✓ Gallery Add Form initialized');
 </script>
 
 <?php include 'includes/footer.php'; ?>

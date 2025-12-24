@@ -21,33 +21,70 @@ if ($result->num_rows == 0) {
 $gallery = $result->fetch_assoc();
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $title = clean_input($_POST['title']);
-    $description = clean_input($_POST['description']);
+    $title = $conn->real_escape_string(trim($_POST['title']));
+    $description = $conn->real_escape_string(trim($_POST['description']));
     
     // Check if new image uploaded and cropped
-    if (isset($_POST['cropped_image']) && !empty($_POST['cropped_image'])) {
-        // Delete old image
-        $old_image = 'uploads/gallery/' . $gallery['image'];
-        if (file_exists($old_image)) {
-            unlink($old_image);
+    if (isset($_POST['cropped_image']) && !empty($_POST['cropped_image']) && strlen($_POST['cropped_image']) > 100) {
+        // FIXED: Path yang benar
+        $upload_dir = __DIR__ . '/uploads/gallery/';
+        
+        // Check folder writable
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
         }
         
-        // Save new cropped image
-        $cropped_data = $_POST['cropped_image'];
-        $image_parts = explode(";base64,", $cropped_data);
-        $image_base64 = base64_decode($image_parts[1]);
-        
-        $filename = 'gallery_' . uniqid() . '_' . time() . '.jpg';
-        $filepath = 'uploads/gallery/' . $filename;
-        
-        if (file_put_contents($filepath, $image_base64)) {
-            $sql = "UPDATE gallery SET 
-                    title = '$title',
-                    description = '$description',
-                    image = '$filename'
-                    WHERE id = $id";
+        if (!is_writable($upload_dir)) {
+            $error = "Folder uploads/gallery/ tidak dapat ditulis! Hubungi hosting untuk chmod 755.";
         } else {
-            $error = "Gagal menyimpan gambar!";
+            // Delete old image
+            $old_image = $upload_dir . $gallery['image'];
+            if (file_exists($old_image)) {
+                unlink($old_image);
+            }
+            
+            // Save new cropped image
+            $cropped_data = $_POST['cropped_image'];
+            $image_parts = explode(";base64,", $cropped_data);
+            
+            if (count($image_parts) > 1) {
+                $image_base64 = base64_decode($image_parts[1]);
+                
+                $filename = 'gallery_' . uniqid() . '_' . time() . '.jpg';
+                $filepath = $upload_dir . $filename;
+                
+                if (file_put_contents($filepath, $image_base64)) {
+                    chmod($filepath, 0644);
+                    
+                    $sql = "UPDATE gallery SET 
+                            title = '$title',
+                            description = '$description',
+                            image = '$filename'
+                            WHERE id = $id";
+                    
+                    if ($conn->query($sql)) {
+                        $success = "Foto berhasil diupdate dengan gambar baru!";
+                        $result = $conn->query("SELECT * FROM gallery WHERE id = $id");
+                        $gallery = $result->fetch_assoc();
+                        
+                        echo "<script>
+                            alert('Foto berhasil diupdate dengan gambar baru!');
+                            setTimeout(function() {
+                                window.location.href = 'gallery.php';
+                            }, 1000);
+                        </script>";
+                    } else {
+                        $error = "Gagal mengupdate database: " . $conn->error;
+                        if (file_exists($filepath)) {
+                            unlink($filepath);
+                        }
+                    }
+                } else {
+                    $error = "Gagal menyimpan gambar! Error: " . error_get_last()['message'];
+                }
+            } else {
+                $error = "Format gambar tidak valid!";
+            }
         }
     } else {
         // Update without changing image
@@ -55,15 +92,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 title = '$title',
                 description = '$description'
                 WHERE id = $id";
-    }
-    
-    if (!$error && isset($sql) && $conn->query($sql)) {
-        $success = "Foto gallery berhasil diupdate!";
-        // Refresh data
-        $result = $conn->query("SELECT * FROM gallery WHERE id = $id");
-        $gallery = $result->fetch_assoc();
-    } else if (!$error) {
-        $error = "Gagal mengupdate foto: " . $conn->error;
+        
+        if ($conn->query($sql)) {
+            $success = "Foto berhasil diupdate!";
+            $result = $conn->query("SELECT * FROM gallery WHERE id = $id");
+            $gallery = $result->fetch_assoc();
+            
+            echo "<script>
+                alert('Foto berhasil diupdate!');
+                setTimeout(function() {
+                    window.location.href = 'gallery.php';
+                }, 1000);
+            </script>";
+        } else {
+            $error = "Gagal mengupdate foto: " . $conn->error;
+        }
     }
 }
 ?>
@@ -72,53 +115,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
 
 <style>
-.crop-container {
-    max-width: 100%;
-    max-height: 500px;
-    background: #f0f0f0;
-    border-radius: 10px;
-    overflow: hidden;
-    margin: 1rem 0;
-}
-
-.crop-preview {
-    margin-top: 1rem;
-    border: 2px solid #ddd;
-    border-radius: 10px;
-    overflow: hidden;
-    max-width: 400px;
-}
-
-.crop-controls {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    flex-wrap: wrap;
-}
-
-#imagePreview {
-    max-width: 100%;
-    display: block;
-}
-
-.hidden {
-    display: none;
-}
-
-.current-image {
-    max-width: 400px;
-    border-radius: 10px;
-    margin-bottom: 1rem;
-}
-
-.alert-info {
-    background: #d1ecf1;
-    color: #0c5460;
-    padding: 1rem;
-    border-radius: 5px;
-    border-left: 4px solid #17a2b8;
-    margin-bottom: 1rem;
-}
+.crop-container { max-width: 100%; max-height: 500px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 1rem 0; }
+.crop-preview { margin-top: 1rem; border: 2px solid #ddd; border-radius: 10px; overflow: hidden; max-width: 400px; }
+.crop-controls { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+#imagePreview { max-width: 100%; display: block; }
+.hidden { display: none; }
+.current-image { max-width: 400px; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+.alert-info { background: #d1ecf1; color: #0c5460; padding: 1rem; border-radius: 5px; border-left: 4px solid #17a2b8; margin-bottom: 1rem; }
 </style>
 
 <div class="content-box">
@@ -159,15 +162,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         </div>
         
         <div class="form-group">
-            <label><i class="fas fa-image"></i> Foto Gallery</label>
-            <p style="margin-bottom: 1rem; font-weight: 600;">Foto Saat Ini:</p>
-            <img src="uploads/gallery/<?php echo $gallery['image']; ?>" 
-                 alt="Current Image" 
-                 class="current-image">
+            <label><i class="fas fa-image"></i> Gambar Gallery</label>
+            <p style="margin-bottom: 1rem; font-weight: 600;">Gambar Saat Ini:</p>
+            
+            <?php
+            $current_image = 'uploads/gallery/' . $gallery['image'];
+            if (file_exists($current_image)):
+            ?>
+                <img src="<?php echo $current_image; ?>" 
+                     alt="Current Image" 
+                     class="current-image">
+            <?php else: ?>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    File gambar tidak ditemukan: <code><?php echo htmlspecialchars($gallery['image']); ?></code>
+                </div>
+            <?php endif; ?>
             
             <div class="file-upload-box" onclick="document.getElementById('imageInput').click()">
                 <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
-                <p>Klik untuk mengganti foto (opsional)</p>
+                <p>Klik untuk mengganti gambar (opsional)</p>
                 <small style="color: #999;">Format: JPG, PNG, GIF (Rekomendasi: <strong>800x600px</strong> - 4:3 Ratio)</small>
                 <input type="file" id="imageInput" accept="image/*" style="display: none;">
             </div>
@@ -191,9 +205,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="cropper.reset()">
                     <i class="fas fa-undo"></i> Reset
-                </button>
-                <button type="button" class="btn btn-warning btn-sm" onclick="document.getElementById('imageInput').click()">
-                    <i class="fas fa-image"></i> Ganti Gambar
                 </button>
             </div>
             
@@ -223,44 +234,25 @@ const cropperArea = document.getElementById('cropperArea');
 const croppedImage = document.getElementById('croppedImage');
 const croppedPreview = document.getElementById('croppedPreview');
 const submitBtn = document.getElementById('submitBtn');
-const galleryForm = document.getElementById('galleryForm');
 
 imageInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     
     if (file) {
-        if (cropper) {
-            cropper.destroy();
-        }
+        if (cropper) cropper.destroy();
         
         const reader = new FileReader();
         reader.onload = function(event) {
             imagePreview.src = event.target.result;
             cropperArea.classList.remove('hidden');
             
-            // Aspect ratio 4:3 untuk gallery
             cropper = new Cropper(imagePreview, {
-                aspectRatio: 4 / 3, // 4:3 ratio
+                aspectRatio: 4 / 3,
                 viewMode: 2,
                 autoCropArea: 1,
                 responsive: true,
-                guides: true,
-                center: true,
-                highlight: true,
-                background: true,
-                movable: true,
-                rotatable: true,
-                scalable: true,
-                zoomable: true,
-                zoomOnWheel: true,
-                cropBoxResizable: true,
-                cropBoxMovable: true,
                 crop: updateCroppedPreview,
-                cropend: updateCroppedPreview,
-                zoom: updateCroppedPreview,
-                ready: function() {
-                    updateCroppedPreview();
-                }
+                ready: updateCroppedPreview
             });
         };
         reader.readAsDataURL(file);
@@ -270,17 +262,11 @@ imageInput.addEventListener('change', function(e) {
 function updateCroppedPreview() {
     if (cropper) {
         const canvas = cropper.getCroppedCanvas({
-            width: 800,
-            height: 600, // 4:3 ratio = 800x600px
-            minWidth: 800,
-            minHeight: 600,
-            maxWidth: 800,
-            maxHeight: 600,
+            width: 800, height: 600,
             fillColor: '#fff',
             imageSmoothingEnabled: true,
             imageSmoothingQuality: 'high'
         });
-        
         if (canvas) {
             croppedPreview.src = canvas.toDataURL('image/jpeg', 0.95);
             croppedImage.value = canvas.toDataURL('image/jpeg', 0.95);
@@ -288,7 +274,7 @@ function updateCroppedPreview() {
     }
 }
 
-galleryForm.addEventListener('submit', function(e) {
+document.getElementById('galleryForm').addEventListener('submit', function() {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 });
