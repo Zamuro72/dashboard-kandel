@@ -1,9 +1,9 @@
 <?php
 // Konfigurasi Database
-define('DB_HOST', 'sql106.infinityfree.com');
-define('DB_USER', 'if0_40346880');
-define('DB_PASS', 'Zamuro1702');
-define('DB_NAME', 'if0_40346880_db_kandel25');
+define('DB_HOST', 'sql100.infinityfree.com);
+define('DB_USER', 'if0_40520125');
+define('DB_PASS', 'auza1702');
+define('DB_NAME', 'if0_40520125_zamuro');
 
 // Koneksi Database
 try {
