@@ -94,36 +94,58 @@ $result = $conn->query($sql);
     font-size: 3rem;
     margin-bottom: 0.5rem;
 }
+
+.alert-info {
+    background: #d1ecf1;
+    color: #0c5460;
+    padding: 1rem;
+    border-radius: 5px;
+    border-left: 4px solid #17a2b8;
+    margin-bottom: 1rem;
+}
 </style>
 
 <div class="content-box">
     <div class="content-box-header">
-        <h2><i class="fas fa-images"></i> Gallery Foto</h2>
+        <h2><i class="fas fa-images"></i> Gallery Foto (BLOB System)</h2>
         <a href="gallery-add.php" class="btn btn-primary">
             <i class="fas fa-plus"></i> Tambah Foto
         </a>
     </div>
     
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> 
+        <strong>Sistem Baru:</strong> Gambar disimpan langsung di database. Tidak ada dependency folder uploads lagi!
+    </div>
+    
     <?php if ($result && $result->num_rows > 0): ?>
         <div class="gallery-grid">
             <?php while ($row = $result->fetch_assoc()): 
-                // FIXED: Path gambar yang benar
-                $image_path = 'uploads/gallery/' . $row['image'];
-                $image_exists = file_exists($image_path);
+                // Check if image exists in BLOB or file
+                $has_blob = !empty($row['image_blob']);
+                $has_file = file_exists('uploads/gallery/' . $row['image']);
             ?>
                 <div class="gallery-card">
                     <div class="gallery-image-wrapper">
-                        <?php if ($image_exists): ?>
-                            <img src="<?php echo htmlspecialchars($image_path); ?>" 
+                        <?php if ($has_blob): ?>
+                            <!-- Display from BLOB -->
+                            <img src="display-gallery-image.php?id=<?php echo $row['id']; ?>" 
                                  alt="<?php echo htmlspecialchars($row['title']); ?>" 
                                  class="gallery-image"
-                                 onerror="this.parentElement.innerHTML='<div class=\'image-error\'><i class=\'fas fa-image\'></i><small>Gambar tidak ditemukan</small></div>'">
+                                 onerror="this.parentElement.innerHTML='<div class=\'image-error\'><i class=\'fas fa-image\'></i><small>Error loading image</small></div>'">
+                        <?php elseif ($has_file): ?>
+                            <!-- Fallback to file system -->
+                            <img src="uploads/gallery/<?php echo htmlspecialchars($row['image']); ?>" 
+                                 alt="<?php echo htmlspecialchars($row['title']); ?>" 
+                                 class="gallery-image"
+                                 onerror="this.parentElement.innerHTML='<div class=\'image-error\'><i class=\'fas fa-image\'></i><small>Image not found</small></div>'">
                         <?php else: ?>
+                            <!-- No image available -->
                             <div class="image-error">
                                 <i class="fas fa-exclamation-triangle"></i>
-                                <small>File tidak ditemukan</small>
-                                <small style="font-size: 0.7rem; margin-top: 0.5rem; color: #999;">
-                                    <?php echo htmlspecialchars($row['image']); ?>
+                                <small>Gambar tidak ditemukan</small>
+                                <small style="font-size: 0.75rem; margin-top: 0.5rem;">
+                                    ID: <?php echo $row['id']; ?>
                                 </small>
                             </div>
                         <?php endif; ?>
@@ -140,9 +162,25 @@ $result = $conn->query($sql);
                             </p>
                         <?php endif; ?>
                         
-                        <div style="font-size: 0.85rem; color: #999; margin-bottom: 1rem;">
+                        <div style="font-size: 0.85rem; color: #999; margin-bottom: 0.5rem;">
                             <i class="far fa-clock"></i> 
                             <?php echo date('d/m/Y H:i', strtotime($row['created_at'])); ?>
+                        </div>
+                        
+                        <div style="font-size: 0.75rem; color: #999; margin-bottom: 1rem;">
+                            <?php if ($has_blob): ?>
+                                <span style="background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 10px;">
+                                    <i class="fas fa-database"></i> BLOB
+                                </span>
+                            <?php elseif ($has_file): ?>
+                                <span style="background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 10px;">
+                                    <i class="fas fa-file"></i> File
+                                </span>
+                            <?php else: ?>
+                                <span style="background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 10px;">
+                                    <i class="fas fa-times"></i> Missing
+                                </span>
+                            <?php endif; ?>
                         </div>
                         
                         <div class="gallery-actions">

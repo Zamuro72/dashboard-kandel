@@ -7,47 +7,70 @@ $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $title = clean_input($_POST['title']);
-    $description = clean_input($_POST['description']);
+    error_log("=== GALLERY ADD (BLOB) DEBUG ===");
+    
+    $title = $conn->real_escape_string(trim($_POST['title']));
+    $description = $conn->real_escape_string(trim($_POST['description']));
+    
+    error_log("Title: " . $title);
     
     // Handle cropped image
     if (isset($_POST['cropped_image']) && !empty($_POST['cropped_image'])) {
-        // Decode base64 image
         $cropped_data = $_POST['cropped_image'];
         
-        // Remove data:image/png;base64, prefix
+        // Remove data:image/jpeg;base64, prefix
         $image_parts = explode(";base64,", $cropped_data);
-        $image_base64 = base64_decode($image_parts[1]);
         
-        // Generate filename
-        $filename = 'gallery_' . uniqid() . '_' . time() . '.jpg';
-        $filepath = 'uploads/gallery/' . $filename;
-        
-        // Save cropped image
-        if (file_put_contents($filepath, $image_base64)) {
-            $sql = "INSERT INTO gallery (title, description, image) 
-                    VALUES ('$title', '$description', '$filename')";
+        if (count($image_parts) > 1) {
+            $image_base64 = base64_decode($image_parts[1]);
             
-            if ($conn->query($sql)) {
-                $success = "Foto berhasil ditambahkan!";
+            // Detect image type
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $image_type = finfo_buffer($finfo, $image_base64);
+            finfo_close($finfo);
+            
+            error_log("Image type: " . $image_type);
+            error_log("Image size: " . strlen($image_base64) . " bytes");
+            
+            // Generate filename untuk reference (optional)
+            $filename = 'gallery_' . uniqid() . '_' . time() . '.jpg';
+            
+            // Escape binary data untuk database
+            $image_blob_escaped = $conn->real_escape_string($image_base64);
+            
+            // Insert ke database dengan BLOB
+            $stmt = $conn->prepare("INSERT INTO gallery (title, description, image, image_blob, image_type, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+            $stmt->bind_param("sssss", $title, $description, $filename, $image_base64, $image_type);
+            
+            if ($stmt->execute()) {
+                $success = "Foto berhasil ditambahkan ke database!";
+                error_log("✓ Database insert successful!");
+                
                 echo "<script>
+                    alert('Foto berhasil ditambahkan!');
                     setTimeout(function() {
                         window.location.href = 'gallery.php';
-                    }, 2000);
+                    }, 1000);
                 </script>";
             } else {
-                $error = "Gagal menyimpan foto: " . $conn->error;
+                $error = "Gagal menyimpan ke database: " . $stmt->error;
+                error_log("✗ Database error: " . $stmt->error);
             }
+            
+            $stmt->close();
         } else {
-            $error = "Gagal menyimpan gambar!";
+            $error = "Format gambar tidak valid!";
+            error_log("✗ Invalid base64 format");
         }
     } else {
-        $error = "Foto harus diupload dan di-crop!";
+        $error = "Gambar harus diupload dan di-crop!";
+        error_log("✗ No cropped image data received");
     }
+    
+    error_log("=== END DEBUG ===");
 }
 ?>
 
-<!-- Cropper.js CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
 
 <style>
@@ -92,11 +115,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     border-left: 4px solid #17a2b8;
     margin-bottom: 1rem;
 }
+
+.alert-warning {
+    background: #fff3cd;
+    color: #856404;
+    padding: 1rem;
+    border-radius: 5px;
+    border-left: 4px solid #ffc107;
+    margin-bottom: 1rem;
+}
 </style>
 
 <div class="content-box">
     <div class="content-box-header">
-        <h2><i class="fas fa-plus-circle"></i> Tambah Foto Gallery</h2>
+        <h2><i class="fas fa-plus-circle"></i> Tambah Foto Gallery (Simpan ke Database)</h2>
         <a href="gallery.php" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Kembali
         </a>
@@ -104,7 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     <div class="alert alert-info">
         <i class="fas fa-info-circle"></i> 
-        <strong>Rekomendasi Ukuran:</strong> Gunakan gambar dengan resolusi <strong>800x600px</strong> (aspect ratio 4:3) untuk hasil terbaik.
+        <strong>Sistem Baru:</strong> Gambar akan disimpan langsung di database (BLOB). Tidak perlu folder uploads lagi.
+    </div>
+    
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> 
+        <strong>Ukuran File:</strong> Maksimal 5MB per gambar. Rekomendasi: <strong>800x600px</strong> (4:3 ratio)
     </div>
     
     <?php if ($success): ?>
@@ -137,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="file-upload-box" onclick="document.getElementById('imageInput').click()">
                 <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
                 <p>Klik untuk upload foto</p>
-                <small style="color: #999;">Format: JPG, PNG, GIF (Rekomendasi: <strong>800x600px</strong> - 4:3 Ratio)</small>
+                <small style="color: #999;">Format: JPG, PNG, GIF | Max: 5MB | Rekomendasi: <strong>800x600px</strong></small>
                 <input type="file" id="imageInput" accept="image/*" style="display: none;">
             </div>
         </div>
@@ -171,6 +208,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <div class="crop-preview">
                     <img id="croppedPreview" src="" alt="Cropped Preview" style="width: 100%; display: block;">
                 </div>
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 5px;">
+                    <small><i class="fas fa-info-circle"></i> <strong>File Size:</strong> <span id="fileSize">-</span></small>
+                </div>
             </div>
         </div>
         
@@ -178,12 +218,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <input type="hidden" id="croppedImage" name="cropped_image">
         
         <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
-            <i class="fas fa-save"></i> Simpan Foto
+            <i class="fas fa-save"></i> Simpan ke Database
         </button>
     </form>
 </div>
 
-<!-- Cropper.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
 
 <script>
@@ -195,26 +234,35 @@ const croppedImage = document.getElementById('croppedImage');
 const croppedPreview = document.getElementById('croppedPreview');
 const submitBtn = document.getElementById('submitBtn');
 const galleryForm = document.getElementById('galleryForm');
+const fileSizeDisplay = document.getElementById('fileSize');
 
-// Handle image selection
 imageInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     
     if (file) {
-        // Destroy existing cropper
+        // Check file size (5MB max)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            alert('❌ File terlalu besar! Maksimal 5MB.\nUkuran file Anda: ' + (file.size / 1024 / 1024).toFixed(2) + 'MB');
+            imageInput.value = '';
+            return;
+        }
+        
+        console.log('✓ Image selected:', file.name, '(' + (file.size/1024/1024).toFixed(2) + 'MB)');
+        
         if (cropper) {
             cropper.destroy();
         }
         
-        // Create image URL
         const reader = new FileReader();
         reader.onload = function(event) {
             imagePreview.src = event.target.result;
             cropperArea.classList.remove('hidden');
             
-            // Initialize Cropper dengan aspect ratio 4:3 untuk gallery
+            console.log('✓ Initializing cropper (4:3 ratio)...');
+            
             cropper = new Cropper(imagePreview, {
-                aspectRatio: 4 / 3, // 4:3 ratio untuk gallery
+                aspectRatio: 4 / 3,
                 viewMode: 2,
                 autoCropArea: 1,
                 responsive: true,
@@ -233,8 +281,10 @@ imageInput.addEventListener('change', function(e) {
                 cropend: updateCroppedPreview,
                 zoom: updateCroppedPreview,
                 ready: function() {
+                    console.log('✓ Cropper ready!');
                     updateCroppedPreview();
                     submitBtn.disabled = false;
+                    cropperArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
         };
@@ -242,12 +292,11 @@ imageInput.addEventListener('change', function(e) {
     }
 });
 
-// Update preview hasil crop
 function updateCroppedPreview() {
     if (cropper) {
         const canvas = cropper.getCroppedCanvas({
             width: 800,
-            height: 600, // 4:3 ratio = 800x600px
+            height: 600,
             minWidth: 800,
             minHeight: 600,
             maxWidth: 800,
@@ -258,26 +307,63 @@ function updateCroppedPreview() {
         });
         
         if (canvas) {
-            // Update preview
-            croppedPreview.src = canvas.toDataURL('image/jpeg', 0.95);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            croppedPreview.src = dataUrl;
+            croppedImage.value = dataUrl;
             
-            // Save cropped image data
-            croppedImage.value = canvas.toDataURL('image/jpeg', 0.95);
+            // Calculate file size
+            const base64Length = dataUrl.split(',')[1].length;
+            const sizeInBytes = Math.ceil(base64Length * 3 / 4);
+            const sizeInKB = (sizeInBytes / 1024).toFixed(2);
+            const sizeInMB = (sizeInBytes / 1024 / 1024).toFixed(2);
+            
+            fileSizeDisplay.textContent = sizeInKB + ' KB (' + sizeInMB + ' MB)';
+            
+            // Warn if too large
+            if (sizeInBytes > 5 * 1024 * 1024) {
+                fileSizeDisplay.style.color = '#dc3545';
+                fileSizeDisplay.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + sizeInKB + ' KB - TOO LARGE!';
+            } else {
+                fileSizeDisplay.style.color = '#28a745';
+            }
+            
+            console.log('✓ Cropped to 800x600px, size:', sizeInKB, 'KB');
         }
     }
 }
 
-// Validate before submit
 galleryForm.addEventListener('submit', function(e) {
-    if (!croppedImage.value) {
+    const title = document.getElementById('title').value.trim();
+    const croppedImageData = croppedImage.value;
+    
+    if (!title) {
         e.preventDefault();
-        alert('Silakan upload dan crop gambar terlebih dahulu!');
+        alert('❌ Judul foto harus diisi!');
+        return false;
+    }
+    
+    if (!croppedImageData) {
+        e.preventDefault();
+        alert('❌ Silakan upload dan crop gambar terlebih dahulu!');
+        return false;
+    }
+    
+    // Check size before submit
+    const base64Length = croppedImageData.split(',')[1].length;
+    const sizeInBytes = Math.ceil(base64Length * 3 / 4);
+    if (sizeInBytes > 5 * 1024 * 1024) {
+        e.preventDefault();
+        alert('❌ Gambar terlalu besar untuk disimpan! Maksimal 5MB.');
         return false;
     }
     
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan ke Database...';
+    
+    console.log('✓ Submitting to database...');
 });
+
+console.log('✓ Gallery Add (BLOB) initialized');
 </script>
 
 <?php include 'includes/footer.php'; ?>
