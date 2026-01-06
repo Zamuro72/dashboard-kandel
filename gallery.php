@@ -3,8 +3,23 @@ $page_title = "Kelola Gallery";
 include 'includes/header.php';
 include 'includes/sidebar.php';
 
-// Get all gallery
-$sql = "SELECT * FROM gallery ORDER BY created_at DESC";
+$success = '';
+$error = '';
+
+// Handle update urutan
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_urutan'])) {
+    if (!empty($_POST['urutan'])) {
+        foreach ($_POST['urutan'] as $id => $urutan) {
+            $id = (int)$id;
+            $urutan = (int)$urutan;
+            $conn->query("UPDATE gallery SET urutan = $urutan WHERE id = $id");
+        }
+        $success = "Urutan foto berhasil diupdate!";
+    }
+}
+
+// Get all gallery - ORDER BY urutan
+$sql = "SELECT * FROM gallery ORDER BY urutan ASC, created_at DESC";
 $result = $conn->query($sql);
 ?>
 
@@ -79,20 +94,20 @@ $result = $conn->query($sql);
     margin-top: 1rem;
 }
 
-.image-error {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #f8f9fa;
-    color: #999;
+.urutan-input {
+    width: 60px;
+    padding: 0.3rem 0.5rem;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: 600;
 }
 
-.image-error i {
-    font-size: 3rem;
-    margin-bottom: 0.5rem;
+.sortir-section {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
 }
 
 .alert-info {
@@ -107,7 +122,7 @@ $result = $conn->query($sql);
 
 <div class="content-box">
     <div class="content-box-header">
-        <h2><i class="fas fa-images"></i> Gallery Foto (BLOB System)</h2>
+        <h2><i class="fas fa-images"></i> Gallery Foto</h2>
         <a href="gallery-add.php" class="btn btn-primary">
             <i class="fas fa-plus"></i> Tambah Foto
         </a>
@@ -115,91 +130,108 @@ $result = $conn->query($sql);
     
     <div class="alert alert-info">
         <i class="fas fa-info-circle"></i> 
-        <strong>Sistem Baru:</strong> Gambar disimpan langsung di database. Tidak ada dependency folder uploads lagi!
+        <strong>Sistem Simple:</strong> Gambar disimpan sebagai file di folder uploads/gallery/. 
+        Atur urutan tampilan dengan mengubah nomor urutan.
     </div>
     
+    <?php if ($success): ?>
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> <?php echo $success; ?>
+        </div>
+    <?php endif; ?>
+    
+    <?php if ($error): ?>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
+        </div>
+    <?php endif; ?>
+    
     <?php if ($result && $result->num_rows > 0): ?>
-        <div class="gallery-grid">
-            <?php while ($row = $result->fetch_assoc()): 
-                // Check if image exists in BLOB or file
-                $has_blob = !empty($row['image_blob']);
-                $has_file = file_exists('uploads/gallery/' . $row['image']);
-            ?>
-                <div class="gallery-card">
-                    <div class="gallery-image-wrapper">
-                        <?php if ($has_blob): ?>
-                            <!-- Display from BLOB -->
-                            <img src="display-gallery-image.php?id=<?php echo $row['id']; ?>" 
-                                 alt="<?php echo htmlspecialchars($row['title']); ?>" 
-                                 class="gallery-image"
-                                 onerror="this.parentElement.innerHTML='<div class=\'image-error\'><i class=\'fas fa-image\'></i><small>Error loading image</small></div>'">
-                        <?php elseif ($has_file): ?>
-                            <!-- Fallback to file system -->
-                            <img src="uploads/gallery/<?php echo htmlspecialchars($row['image']); ?>" 
-                                 alt="<?php echo htmlspecialchars($row['title']); ?>" 
-                                 class="gallery-image"
-                                 onerror="this.parentElement.innerHTML='<div class=\'image-error\'><i class=\'fas fa-image\'></i><small>Image not found</small></div>'">
-                        <?php else: ?>
-                            <!-- No image available -->
-                            <div class="image-error">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <small>Gambar tidak ditemukan</small>
-                                <small style="font-size: 0.75rem; margin-top: 0.5rem;">
-                                    ID: <?php echo $row['id']; ?>
-                                </small>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="gallery-info">
-                        <h3 class="gallery-title">
-                            <?php echo htmlspecialchars($row['title']); ?>
-                        </h3>
-                        
-                        <?php if ($row['description']): ?>
-                            <p class="gallery-description">
-                                <?php echo htmlspecialchars($row['description']); ?>
-                            </p>
-                        <?php endif; ?>
-                        
-                        <div style="font-size: 0.85rem; color: #999; margin-bottom: 0.5rem;">
-                            <i class="far fa-clock"></i> 
-                            <?php echo date('d/m/Y H:i', strtotime($row['created_at'])); ?>
-                        </div>
-                        
-                        <div style="font-size: 0.75rem; color: #999; margin-bottom: 1rem;">
-                            <?php if ($has_blob): ?>
-                                <span style="background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 10px;">
-                                    <i class="fas fa-database"></i> BLOB
-                                </span>
-                            <?php elseif ($has_file): ?>
-                                <span style="background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 10px;">
-                                    <i class="fas fa-file"></i> File
-                                </span>
+        <form method="POST" id="urutanForm">
+            <!-- Sortir Section -->
+            <div class="sortir-section">
+                <h3 style="color: var(--dark-bg); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-sort-numeric-down"></i> Atur Urutan Tampilan
+                </h3>
+                <p style="color: #666; margin-bottom: 1rem;">
+                    Ubah nomor urutan di bawah setiap foto, lalu klik <strong>"Simpan Urutan"</strong>. 
+                    Foto dengan urutan lebih kecil akan ditampilkan lebih dulu.
+                </p>
+                <button type="submit" name="update_urutan" class="btn btn-success">
+                    <i class="fas fa-save"></i> Simpan Urutan
+                </button>
+            </div>
+            
+            <div class="gallery-grid">
+                <?php while ($row = $result->fetch_assoc()): 
+                    $image_path = 'uploads/gallery/' . $row['image'];
+                    $image_exists = file_exists($image_path);
+                ?>
+                    <div class="gallery-card">
+                        <div class="gallery-image-wrapper">
+                            <?php if ($image_exists): ?>
+                                <img src="<?php echo $image_path; ?>?v=<?php echo time(); ?>" 
+                                     alt="<?php echo htmlspecialchars($row['title']); ?>" 
+                                     class="gallery-image"
+                                     onerror="this.src='https://via.placeholder.com/800x600?text=Image+Not+Found';">
                             <?php else: ?>
-                                <span style="background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 10px;">
-                                    <i class="fas fa-times"></i> Missing
-                                </span>
+                                <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f8d7da; color: #721c24;">
+                                    <div style="text-align: center;">
+                                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                                        <p>File tidak ditemukan</p>
+                                        <small><?php echo htmlspecialchars($row['image']); ?></small>
+                                    </div>
+                                </div>
                             <?php endif; ?>
                         </div>
                         
-                        <div class="gallery-actions">
-                            <a href="gallery-edit.php?id=<?php echo $row['id']; ?>" 
-                               class="btn btn-warning btn-sm" 
-                               style="flex: 1; justify-content: center;">
-                                <i class="fas fa-edit"></i> Edit
-                            </a>
-                            <a href="gallery-delete.php?id=<?php echo $row['id']; ?>" 
-                               class="btn btn-danger btn-sm" 
-                               onclick="return confirmDelete('Yakin ingin menghapus foto ini?')" 
-                               style="flex: 1; justify-content: center;">
-                                <i class="fas fa-trash"></i> Hapus
-                            </a>
+                        <div class="gallery-info">
+                            <!-- Urutan Input -->
+                            <div style="margin-bottom: 1rem; text-align: center;">
+                                <label style="font-size: 0.85rem; color: #666; display: block; margin-bottom: 0.3rem;">
+                                    <i class="fas fa-sort"></i> Urutan:
+                                </label>
+                                <input type="number" 
+                                       name="urutan[<?php echo $row['id']; ?>]" 
+                                       value="<?php echo $row['urutan']; ?>" 
+                                       min="1" 
+                                       max="999" 
+                                       class="urutan-input">
+                            </div>
+                            
+                            <h3 class="gallery-title">
+                                <?php echo htmlspecialchars($row['title']); ?>
+                            </h3>
+                            
+                            <?php if ($row['description']): ?>
+                                <p class="gallery-description">
+                                    <?php echo htmlspecialchars($row['description']); ?>
+                                </p>
+                            <?php endif; ?>
+                            
+                            <div style="font-size: 0.85rem; color: #999; margin-bottom: 1rem;">
+                                <i class="far fa-clock"></i> 
+                                <?php echo date('d/m/Y H:i', strtotime($row['created_at'])); ?>
+                            </div>
+                            
+                            <div class="gallery-actions">
+                                <a href="gallery-edit.php?id=<?php echo $row['id']; ?>" 
+                                   class="btn btn-warning btn-sm" 
+                                   style="flex: 1; justify-content: center;">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <a href="gallery-delete.php?id=<?php echo $row['id']; ?>" 
+                                   class="btn btn-danger btn-sm" 
+                                   onclick="return confirmDelete('Yakin ingin menghapus foto ini?')" 
+                                   style="flex: 1; justify-content: center;">
+                                    <i class="fas fa-trash"></i> Hapus
+                                </a>
+                            </div>
                         </div>
                     </div>
-                </div>
-            <?php endwhile; ?>
-        </div>
+                <?php endwhile; ?>
+            </div>
+        </form>
     <?php else: ?>
         <div class="empty-state">
             <i class="fas fa-inbox"></i>
@@ -207,5 +239,17 @@ $result = $conn->query($sql);
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+// Highlight changed inputs
+document.querySelectorAll('.urutan-input').forEach(input => {
+    input.addEventListener('change', function() {
+        this.style.borderColor = '#ffc107';
+        this.style.background = '#fff3cd';
+    });
+});
+
+console.log('✓ Gallery (Simple File System) loaded');
+</script>
 
 <?php include 'includes/footer.php'; ?>
